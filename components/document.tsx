@@ -1,68 +1,151 @@
-import { memo, useState } from 'react';
-import { HeartPulseIcon, ActivityIcon, AlertTriangleIcon } from 'lucide-react';
+import { memo } from 'react';
+
+import type { BlockKind } from './block';
+import { FileIcon, LoaderIcon, MessageIcon, PencilEditIcon } from './icons';
 import { toast } from 'sonner';
 import { useBlock } from '@/hooks/use-block';
 
-interface PatientDashboardProps {
-  patient: {
-    name: string;
-    heartRate: number;
-    activityLevel: string;
-    alerts: string[];
-  };
-}
-
-const PatientDashboard = ({ patient }: PatientDashboardProps) => {
-  return (
-      <div className="bg-white shadow-lg rounded-xl p-6 w-full max-w-md">
-        <h2 className="text-xl font-semibold mb-4">{patient.name}'s Dashboard</h2>
-        <div className="flex items-center gap-3 mb-3">
-          <HeartPulseIcon className="text-red-500" />
-          <span className="text-lg">Heart Rate: {patient.heartRate} bpm</span>
-        </div>
-        <div className="flex items-center gap-3 mb-3">
-          <ActivityIcon className="text-blue-500" />
-          <span className="text-lg">Activity Level: {patient.activityLevel}</span>
-        </div>
-        <div className="mb-3">
-          <h3 className="text-lg font-medium mb-2">Alerts:</h3>
-          {patient.alerts.length > 0 ? (
-              patient.alerts.map((alert, index) => (
-                  <div key={index} className="flex items-center gap-2 text-yellow-600">
-                    <AlertTriangleIcon />
-                    <span>{alert}</span>
-                  </div>
-              ))
-          ) : (
-              <span className="text-gray-500">No alerts</span>
-          )}
-        </div>
-      </div>
-  );
+const getActionText = (
+    type: 'create' | 'update' | 'request-suggestions',
+    tense: 'present' | 'past',
+) => {
+    switch (type) {
+        case 'create':
+            return tense === 'present' ? 'Creating' : 'Created';
+        case 'update':
+            return tense === 'present' ? 'Updating' : 'Updated';
+        case 'request-suggestions':
+            return tense === 'present'
+                ? 'Adding suggestions'
+                : 'Added suggestions to';
+        default:
+            return null;
+    }
 };
 
-function DocumentTool({ patient }: { patient: PatientDashboardProps['patient'] }) {
-  const { setBlock } = useBlock();
-  const [showDashboard, setShowDashboard] = useState(false);
-
-  return (
-      <div>
-        {!showDashboard ? (
-            <button
-                type="button"
-                className="bg-blue-500 text-white px-4 py-2 rounded-xl"
-                onClick={() => {
-                  toast.success('Loading patient dashboard...');
-                  setShowDashboard(true);
-                }}
-            >
-              View Patient Dashboard
-            </button>
-        ) : (
-            <PatientDashboard patient={patient} />
-        )}
-      </div>
-  );
+interface DocumentToolResultProps {
+    type: 'create' | 'update' | 'request-suggestions';
+    result: { id: string; title: string; kind: BlockKind };
+    isReadonly: boolean;
 }
 
-export const PatientDashboardTool = memo(DocumentTool);
+function PureDocumentToolResult({
+                                    type,
+                                    result,
+                                    isReadonly,
+                                }: DocumentToolResultProps) {
+    const { setBlock } = useBlock();
+
+    return (
+        <button
+            type="button"
+            className="bg-background cursor-pointer border py-2 px-3 rounded-xl w-fit flex flex-row gap-3 items-start"
+            onClick={(event) => {
+                if (isReadonly) {
+                    toast.error(
+                        'Viewing files in shared chats is currently not supported.',
+                    );
+                    return;
+                }
+
+                const rect = event.currentTarget.getBoundingClientRect();
+
+                const boundingBox = {
+                    top: rect.top,
+                    left: rect.left,
+                    width: rect.width,
+                    height: rect.height,
+                };
+
+                setBlock({
+                    documentId: result.id,
+                    kind: result.kind,
+                    content: '',
+                    title: result.title,
+                    isVisible: true,
+                    status: 'idle',
+                    boundingBox,
+                });
+            }}
+        >
+            <div className="text-muted-foreground mt-1">
+                {type === 'create' ? (
+                    <FileIcon />
+                ) : type === 'update' ? (
+                    <PencilEditIcon />
+                ) : type === 'request-suggestions' ? (
+                    <MessageIcon />
+                ) : null}
+            </div>
+            <div className="text-left">
+                {`${getActionText(type, 'past')} "${result.title}"`}
+            </div>
+        </button>
+    );
+}
+
+export const DocumentToolResult = memo(PureDocumentToolResult, () => true);
+
+interface DocumentToolCallProps {
+    type: 'create' | 'update' | 'request-suggestions';
+    args: { title: string };
+    isReadonly: boolean;
+}
+
+function PureDocumentToolCall({
+                                  type,
+                                  args,
+                                  isReadonly,
+                              }: DocumentToolCallProps) {
+    const { setBlock } = useBlock();
+
+    return (
+        <button
+            type="button"
+            className="cursor pointer w-fit border py-2 px-3 rounded-xl flex flex-row items-start justify-between gap-3"
+            onClick={(event) => {
+                if (isReadonly) {
+                    toast.error(
+                        'Viewing files in shared chats is currently not supported.',
+                    );
+                    return;
+                }
+
+                const rect = event.currentTarget.getBoundingClientRect();
+
+                const boundingBox = {
+                    top: rect.top,
+                    left: rect.left,
+                    width: rect.width,
+                    height: rect.height,
+                };
+
+                setBlock((currentBlock) => ({
+                    ...currentBlock,
+                    isVisible: true,
+                    boundingBox,
+                }));
+            }}
+        >
+            <div className="flex flex-row gap-3 items-start">
+                <div className="text-zinc-500 mt-1">
+                    {type === 'create' ? (
+                        <FileIcon />
+                    ) : type === 'update' ? (
+                        <PencilEditIcon />
+                    ) : type === 'request-suggestions' ? (
+                        <MessageIcon />
+                    ) : null}
+                </div>
+
+                <div className="text-left">
+                    {`${getActionText(type, 'present')} ${args.title ? `"${args.title}"` : ''}`}
+                </div>
+            </div>
+
+            <div className="animate-spin mt-1">{<LoaderIcon />}</div>
+        </button>
+    );
+}
+
+export const DocumentToolCall = memo(PureDocumentToolCall, () => true);
